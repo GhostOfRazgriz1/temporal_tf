@@ -47,7 +47,7 @@ def train(cfg: Config, n_steps: int, digit_bank=None, device=None, on_eval=None,
         clips, _ = generate_batch(gen, bank, cfg, cfg.batch_size)
         parts = train_step(model, clips.to(device), opt, cfg, rng)
         if on_eval is not None and eval_every > 0 and step % eval_every == 0:
-            on_eval(model, step)
+            on_eval(model, step, parts)
         if step % 50 == 0:
             print(f"step {step}: {parts}")
     return model

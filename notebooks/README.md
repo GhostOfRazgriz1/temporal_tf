@@ -5,6 +5,6 @@
 %cd temporal_tf
 %pip install -e .
 from temporal_tf.run_prototype import run
-report = run(n_steps=500, use_mnist=True, track_every=50)
+report = run(n_steps=10000, use_mnist=True, track_every=200)
 report
 ```
