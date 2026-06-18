@@ -1030,20 +1030,20 @@ git commit -m "feat: timescale decorrelation + linear probe evals"
 ### Task 12: Colab entrypoint + end-to-end smoke test
 
 **Files:**
-- Create: `scripts/run_prototype.py`
+- Create: `temporal_tf/run_prototype.py`
 - Create: `notebooks/README.md` (Colab usage)
 - Test: `tests/test_smoke.py`
 
 **Interfaces:**
 - Consumes: everything above.
-- Produces: `scripts/run_prototype.py` with `run(cfg=None, n_steps=300, use_mnist=False) -> dict` that trains, then reports: collapse stats per layer, surprise-localization AUC per layer (averaged over fresh clips), and cross-layer surprise correlation. CLI via `python scripts/run_prototype.py`. (The `linear_probe` utility from Task 11 is unit-tested and available for feature-quality checks once the data generator is extended to return digit labels — a documented follow-up, not part of `run()`.)
+- Produces: `temporal_tf/run_prototype.py` with `run(cfg=None, n_steps=300, use_mnist=False) -> dict` that trains, then reports: collapse stats per layer, surprise-localization AUC per layer (averaged over fresh clips), and cross-layer surprise correlation. CLI via `python -m temporal_tf.run_prototype`. (The `linear_probe` utility from Task 11 is unit-tested and available for feature-quality checks once the data generator is extended to return digit labels — a documented follow-up, not part of `run()`.)
 
 - [ ] **Step 1: Write the failing test**
 ```python
 # tests/test_smoke.py
 import torch
 from temporal_tf.config import Config
-from scripts.run_prototype import run
+from temporal_tf.run_prototype import run
 
 def test_end_to_end_smoke():
     cfg = Config(image_size=16, patch_size=8, d_model=24, n_heads=4, n_layers=4,
@@ -1057,15 +1057,12 @@ def test_end_to_end_smoke():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pytest tests/test_smoke.py -v`
-Expected: FAIL with `ModuleNotFoundError: No module named 'scripts'` (add `scripts/__init__.py` if needed for import, or use a `sys.path` shim in the test — create `scripts/__init__.py`).
+Run: `python -m pytest tests/test_smoke.py -v`
+Expected: FAIL with `ImportError: cannot import name 'run' from 'temporal_tf.run_prototype'` (module doesn't exist yet)
 
 - [ ] **Step 3: Write the implementation**
 ```python
-# scripts/__init__.py
-```
-```python
-# scripts/run_prototype.py
+# temporal_tf/run_prototype.py
 import torch
 from temporal_tf.config import Config, default_config
 from temporal_tf.train import train
@@ -1098,7 +1095,7 @@ def run(cfg: Config = None, n_steps: int = 300, use_mnist: bool = False) -> dict
         last = model(clip.unsqueeze(0), rng=torch.Generator().manual_seed(0))
         collapse = [representation_stats(torch.stack(last.features[li]))["std"]
                     for li in range(cfg.n_layers)]
-    corr = cross_layer_correlation(torch.cat(all_surprise, 0))
+    corr = cross_layer_correlation(torch.cat(all_surprise, 0)[:, 1:])  # drop layer 0 (never predicted -> all-NaN)
     return {
         "auc_per_layer": [float(sum(a) / len(a)) for a in aucs[1:]],
         "collapse_std_per_layer": collapse,
@@ -1117,7 +1114,7 @@ if __name__ == "__main__":
 !git clone https://github.com/GhostOfRazgriz1/temporal_tf.git
 %cd temporal_tf
 !pip install -e .
-from scripts.run_prototype import run
+from temporal_tf.run_prototype import run
 report = run(n_steps=500, use_mnist=True)
 report
 ```
@@ -1125,13 +1122,13 @@ report
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pytest tests/test_smoke.py -v`
+Run: `python -m pytest tests/test_smoke.py -v`
 Expected: PASS (1 passed)
 
 - [ ] **Step 5: Run the whole suite + commit**
 ```bash
-pytest -q
-git add scripts/ notebooks/README.md tests/test_smoke.py
+python -m pytest -q
+git add temporal_tf/run_prototype.py notebooks/README.md tests/test_smoke.py
 git commit -m "feat: colab entrypoint + end-to-end smoke test"
 ```
 
