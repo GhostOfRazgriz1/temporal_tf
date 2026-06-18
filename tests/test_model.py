@@ -17,7 +17,10 @@ def test_forward_record_shapes():
         assert not tgt.requires_grad   # target is stop-grad
 
 def test_pair_targets_respect_horizon_A():
-    cfg = _cfg(); m = TemporalDepthModel(cfg)   # horizon_mode "A" -> 1 step
+    cfg = _cfg(); m = TemporalDepthModel(cfg)   # horizon_mode "A" -> target tick = t (the next feature received)
     out = m(torch.rand(2, cfg.clip_len, 1, 16, 16), rng=torch.Generator().manual_seed(1))
-    # every pair's target tick = t + 1, and no pair exceeds clip length
-    assert all(t + 1 <= cfg.clip_len - 1 for (l, t, P, tgt) in out.pairs)
+    assert out.pairs, "expected prediction pairs"
+    # every pair's target tick (t + h - 1 = t for mode A) is within the clip
+    assert all(0 <= t <= cfg.clip_len - 1 for (l, t, P, tgt) in out.pairs)
+    # the corrected 1-step horizon now includes the final tick
+    assert max(t for (l, t, P, tgt) in out.pairs) == cfg.clip_len - 1

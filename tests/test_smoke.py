@@ -8,5 +8,6 @@ def test_end_to_end_smoke():
     report = run(cfg=cfg, n_steps=20, use_mnist=False)
     assert "auc_per_layer" in report and len(report["auc_per_layer"]) == cfg.n_layers - 1
     assert "collapse_std_per_layer" in report
+    assert "cross_layer_surprise_corr" in report
     for v in report["auc_per_layer"]:
         assert 0.0 <= v <= 1.0

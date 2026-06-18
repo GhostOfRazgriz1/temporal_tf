@@ -29,4 +29,4 @@ def total_loss(out, cfg):
     flat = torch.cat(feats, 0)
     var, cov_t = _vicreg_terms(flat)
     loss = cfg.pred_coef * pred + cfg.var_coef * var + cfg.cov_coef * cov_t
-    return loss, {"pred": float(pred), "var": float(var), "cov": float(cov_t)}
+    return loss, {"pred": pred.detach().item(), "var": var.detach().item(), "cov": cov_t.detach().item()}

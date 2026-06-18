@@ -14,6 +14,7 @@ def run(cfg: Config = None, n_steps: int = 300, use_mnist: bool = False) -> dict
         from temporal_tf.data import load_mnist_digit_bank
         bank = load_mnist_digit_bank("./data")
     model = train(cfg, n_steps=n_steps, digit_bank=bank)
+    device = next(model.online.parameters()).device
 
     model.eval()
     # CRITICAL: use sized bank so digits fit on the canvas (same fix as train.py Task 8)
@@ -24,12 +25,12 @@ def run(cfg: Config = None, n_steps: int = 300, use_mnist: bool = False) -> dict
     with torch.no_grad():
         for _ in range(8):
             clip, bounces = generate_clip(gen, bank, cfg)
-            out = model(clip.unsqueeze(0), rng=torch.Generator().manual_seed(0))
+            out = model(clip.unsqueeze(0).to(device), rng=torch.Generator().manual_seed(0))
             s = out.surprise[0]                        # (T, n_layers)
             all_surprise.append(s)
             for li in range(1, cfg.n_layers):
                 aucs[li].append(localization_auc(s[:, li], bounces))
-        last = model(clip.unsqueeze(0), rng=torch.Generator().manual_seed(0))
+        last = model(clip.unsqueeze(0).to(device), rng=torch.Generator().manual_seed(0))
         collapse = [representation_stats(torch.stack(last.features[li]))["std"]
                     for li in range(cfg.n_layers)]
     # drop layer 0 (never predicted -> all-NaN surprise)

@@ -12,33 +12,40 @@ def train_step(model, clip, optimizer, cfg, rng):
     loss.backward()
     optimizer.step()
     model.update_target()
-    parts["total"] = float(loss)
+    parts["total"] = loss.detach().item()
     return parts
 
-def overfit_batch(cfg: Config, steps: int, clip=None):
+def overfit_batch(cfg: Config, steps: int, clip=None, device=None):
     torch.manual_seed(cfg.seed)
     model = TemporalDepthModel(cfg)
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    model.online.to(device)
+    model.target.module.to(device)   # EMATarget.module is a plain attr; model.to() would NOT move it
     opt = torch.optim.Adam(model.online.parameters(), lr=cfg.lr)
     if clip is None:
         bank = synthetic_digit_bank(size=cfg.image_size // 2)
         clip, _ = generate_clip(torch.Generator().manual_seed(cfg.seed), bank, cfg)
         clip = clip.unsqueeze(0)                       # B=1
+    clip = clip.to(device)
     rng = torch.Generator().manual_seed(cfg.seed)
     hist = []
     for _ in range(steps):
         hist.append(train_step(model, clip, opt, cfg, rng)["total"])
     return hist
 
-def train(cfg: Config, n_steps: int, digit_bank=None):
+def train(cfg: Config, n_steps: int, digit_bank=None, device=None):
     torch.manual_seed(cfg.seed)
     bank = digit_bank if digit_bank is not None else synthetic_digit_bank(size=cfg.image_size // 2)
     model = TemporalDepthModel(cfg)
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    model.online.to(device)
+    model.target.module.to(device)   # EMATarget.module is a plain attr; model.to() would NOT move it
     opt = torch.optim.Adam(model.online.parameters(), lr=cfg.lr)
     gen = torch.Generator().manual_seed(cfg.seed)
     rng = torch.Generator().manual_seed(cfg.seed + 1)
     for step in range(n_steps):
         clip, _ = generate_clip(gen, bank, cfg)
-        parts = train_step(model, clip.unsqueeze(0), opt, cfg, rng)
+        parts = train_step(model, clip.unsqueeze(0).to(device), opt, cfg, rng)
         if step % 50 == 0:
             print(f"step {step}: {parts}")
     return model

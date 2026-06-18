@@ -66,7 +66,7 @@ class TemporalDepthModel(nn.Module):
         for li in range(1, cfg.n_layers):
             h = self.horizon(li)
             for t in range(T):
-                tgt_t = t + h
+                tgt_t = t + h - 1
                 if preds[li][t] is None or tgt_t >= T:
                     continue
                 target = tgt_feats[li - 1][tgt_t].detach()   # stop-grad EMA target
