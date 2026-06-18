@@ -6,7 +6,8 @@ def representation_stats(R):
     xc = x - x.mean(0, keepdim=True)
     s = torch.linalg.svdvals(xc)
     p = s / (s.sum() + 1e-9)
-    eff_rank = float(torch.exp(-(p * (p + 1e-9).log()).sum()))
+    log_p = torch.log(p.clamp(min=1e-9))
+    eff_rank = float(torch.exp(-(p * log_p).sum()))
     return {"std": std, "eff_rank": eff_rank}
 
 def is_collapsed(R, std_thresh=1e-2):
