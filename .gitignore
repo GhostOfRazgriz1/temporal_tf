@@ -1,0 +1,39 @@
+# Claude Code / local agent state
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# ML artifacts / data / logs
+data/
+datasets/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+checkpoints/
+runs/
+logs/
+wandb/
+lightning_logs/
+
+# Secrets / env
+.env
+*.key
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
