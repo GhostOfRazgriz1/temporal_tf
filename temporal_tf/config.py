@@ -19,6 +19,10 @@ class Config:
     tbptt: int = 5
     lr: float = 1e-3
     seed: int = 0
+    teleport_prob: float = 0.0
+    batch_size: int = 1
+    n_mask_draws: int = 1
+    n_eval_clips: int = 8
 
     @property
     def n_tokens(self) -> int:
