@@ -23,6 +23,7 @@ class Config:
     batch_size: int = 1
     n_mask_draws: int = 1
     n_eval_clips: int = 8
+    surprise_topk: int = 4
 
     @property
     def n_tokens(self) -> int:
