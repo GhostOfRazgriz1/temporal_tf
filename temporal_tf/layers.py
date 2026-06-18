@@ -48,3 +48,26 @@ class FrameEncoder(nn.Module):
         if mask is not None:
             x = torch.where(mask.unsqueeze(-1), self.mask_token, x)
         return self.block(x)
+
+class PredictiveCell(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        d = cfg.d_model
+        self.n_tokens = cfg.n_tokens
+        self.d_model = d
+        self.in_norm = nn.LayerNorm(d)
+        self.block = TransformerBlock(d, cfg.n_heads, cfg.mlp_ratio)   # spatial mixing
+        self.gru = nn.GRUCell(d, d)                                    # temporal recurrence (per token)
+        self.refine = nn.Linear(d, d)                                  # -> refined feature R
+        self.predict = nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, d))  # -> prediction P
+
+    def init_state(self, B, device):
+        return torch.zeros(B, self.n_tokens, self.d_model, device=device)
+
+    def forward(self, x_in, h_prev):
+        ctx = self.block(self.in_norm(x_in))                  # spatial self-attention over incoming feature
+        B, N, d = ctx.shape
+        h_new = self.gru(ctx.reshape(B * N, d), h_prev.reshape(B * N, d)).reshape(B, N, d)
+        R = self.refine(h_new)
+        P = self.predict(h_new)                               # firewalled: depends only on state, not the target
+        return R, P, h_new
