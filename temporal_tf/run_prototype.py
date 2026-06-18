@@ -13,20 +13,32 @@ def _collect(model, cfg, bank, n_clips):
     labels = {"bounce": [], "teleport": []}
     last = None
     with torch.no_grad():
-        for _ in range(n_clips):
+        for ci in range(n_clips):
             clips, ev = generate_batch(gen, bank, cfg, B=1)
-            out = model(clips.to(device), rng=torch.Generator().manual_seed(0))
-            last = out
-            maps = surprise_maps(out, cfg.n_layers, cfg.surprise_topk)
+            clip = clips.to(device)
+            K = max(1, cfg.n_mask_draws)
+            map_draws = {"mean": [], "max": [], "topk": []}
+            err_draws = []
+            first_out = None
+            for d in range(K):
+                out = model(clip, rng=torch.Generator().manual_seed(1000 * ci + d))
+                if first_out is None:
+                    first_out = out
+                m = surprise_maps(out, cfg.n_layers, cfg.surprise_topk)
+                for r in map_draws:
+                    map_draws[r].append(m[r][0])                                   # (T, n_layers)
+                err_draws.append(per_tick_error_features(out, cfg.n_layers, cfg.surprise_topk)[0])  # (T, F)
             for r in red:
-                red[r].append(maps[r][0])                              # (T, n_layers)
-            err_feats.append(per_tick_error_features(out, cfg.n_layers, cfg.surprise_topk)[0])  # (T, F)
-            T = clips.shape[1]
+                red[r].append(torch.stack(map_draws[r]).mean(0))                   # avg over draws
+            err_feats.append(torch.stack(err_draws).mean(0))
+            out = first_out
+            last = out
+            T = clip.shape[1]
             rows = []
             for t in range(T):
-                vecs = [out.features[li][t][0].mean(0) for li in range(1, cfg.n_layers)]  # each (d,)
+                vecs = [out.features[li][t][0].mean(0) for li in range(1, cfg.n_layers)]
                 rows.append(torch.cat(vecs))
-            feat_feats.append(torch.stack(rows))                        # (T, (n_layers-1)*d)
+            feat_feats.append(torch.stack(rows))
             labels["bounce"].append(ev["bounce"][0])
             labels["teleport"].append(ev["teleport"][0])
     return red, err_feats, feat_feats, labels, last

@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
@@ -24,6 +25,8 @@ def pooled_auc(scores, labels):
     y = labels.detach().cpu().bool().flatten()
     valid = ~torch.isnan(s)
     s, y = s[valid], y[valid]
+    if len(s) == 0:
+        return 0.5
     if y.sum() == 0 or y.sum() == len(y):
         return 0.5
     if torch.allclose(s, s[0].expand_as(s)):
@@ -46,7 +49,6 @@ def per_tick_error_features(out, n_layers, topk):
 def event_probe(features, labels, test_size=0.3, seed=0):
     X = features.detach().cpu().reshape(-1, features.shape[-1]).numpy()
     y = labels.detach().cpu().bool().reshape(-1).numpy()
-    import numpy as np
     keep = ~np.isnan(X).any(1)
     X, y = X[keep], y[keep]
     if y.sum() < 2 or (~y).sum() < 2:
