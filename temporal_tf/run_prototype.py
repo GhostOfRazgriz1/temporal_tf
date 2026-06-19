@@ -1,4 +1,6 @@
+import statistics
 import torch
+from dataclasses import replace
 from temporal_tf.config import Config, default_config
 from temporal_tf.train import train
 from temporal_tf.data import synthetic_digit_bank, generate_batch
@@ -43,6 +45,14 @@ def _collect(model, cfg, bank, n_clips):
             labels["teleport"].append(ev["teleport"][0])
     return red, err_feats, feat_feats, labels, last
 
+def _probe_set(model, cfg, bank, n_clips):
+    red, err_feats, feat_feats, labels, _ = _collect(model, cfg, bank, n_clips)
+    err_X, feat_X = torch.cat(err_feats), torch.cat(feat_feats)
+    err = {ev: event_probe(err_X, torch.cat(labels[ev])) for ev in ("bounce", "teleport")}
+    feat = {ev: event_probe(feat_X, torch.cat(labels[ev])) for ev in ("bounce", "teleport")}
+    return err, feat
+
+
 def run(cfg: Config = None, n_steps: int = 300, use_mnist: bool = False, track_every: int = 0) -> dict:
     cfg = cfg or default_config()
     bank = None
@@ -52,9 +62,12 @@ def run(cfg: Config = None, n_steps: int = 300, use_mnist: bool = False, track_e
     eval_bank = bank if bank is not None else synthetic_digit_bank(size=cfg.image_size // 2)
 
     loss_curve = []
+    probe_clips = max(2, cfg.n_eval_clips // 5)
     def on_eval(model, step, parts):
+        err, feat = _probe_set(model, cfg, eval_bank, probe_clips)
         loss_curve.append({"step": step, "pred": parts["pred"], "var": parts["var"],
-                           "cov": parts["cov"], "total": parts["total"]})
+                           "cov": parts["cov"], "total": parts["total"],
+                           "error_probe_auc": err, "feature_probe_auc": feat})
 
     model = train(cfg, n_steps=n_steps, digit_bank=bank,
                   on_eval=(on_eval if track_every > 0 else None), eval_every=track_every)
@@ -73,13 +86,40 @@ def run(cfg: Config = None, n_steps: int = 300, use_mnist: bool = False, track_e
     feature_probe = {ev: event_probe(feat_X, torch.cat(labels[ev])) for ev in ("bounce", "teleport")}
     collapse = [representation_stats(torch.stack(last.features[li]))["std"] for li in range(cfg.n_layers)]
 
-    return {
+    out = {
         "loss_curve": loss_curve,
         "raw_pooled_auc": raw,
         "error_probe_auc": error_probe,
         "feature_probe_auc": feature_probe,
         "collapse_std_per_layer": collapse,
     }
+    if track_every > 0 and loss_curve:
+        best = max(loss_curve, key=lambda e: e["error_probe_auc"]["teleport"])
+        out["best_error_probe_teleport"] = {"step": best["step"], "auc": best["error_probe_auc"]["teleport"]}
+    return out
+
+
+def _ms(xs):
+    return {"mean": statistics.fmean(xs),
+            "std": (statistics.pstdev(xs) if len(xs) > 1 else 0.0),
+            "values": list(xs)}
+
+
+def run_seeds(cfg: Config, n_steps: int, seeds, use_mnist: bool = False, track_every: int = 0) -> dict:
+    finals = {"teleport": [], "bounce": []}
+    bests = []
+    for s in seeds:
+        r = run(cfg=replace(cfg, seed=s), n_steps=n_steps, use_mnist=use_mnist, track_every=track_every)
+        finals["teleport"].append(r["error_probe_auc"]["teleport"])
+        finals["bounce"].append(r["error_probe_auc"]["bounce"])
+        if "best_error_probe_teleport" in r:
+            bests.append(r["best_error_probe_teleport"]["auc"])
+    agg = {"final_error_probe_teleport": _ms(finals["teleport"]),
+           "final_error_probe_bounce": _ms(finals["bounce"])}
+    if bests:
+        agg["best_error_probe_teleport"] = _ms(bests)
+    return agg
+
 
 if __name__ == "__main__":
     import json
