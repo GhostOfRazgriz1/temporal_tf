@@ -24,6 +24,9 @@ class Config:
     n_mask_draws: int = 1
     n_eval_clips: int = 8
     surprise_topk: int = 4
+    grad_clip: float = 0.0
+    warmup_steps: int = 0
+    lr_schedule: str = "none"   # "none" | "cosine"
 
     @property
     def n_tokens(self) -> int:
